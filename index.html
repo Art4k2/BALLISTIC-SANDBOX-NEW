@@ -1,0 +1,2192 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BALLISTIC SANDBOX — Стенд расчёта бронепробития</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-app:#0b0d11;
+    --bg-canvas:#0f1115;
+    --bg-panel:#1a1d24;
+    --bg-panel-raised:#20232c;
+    --border:#2a2e39;
+    --border-soft:#23262f;
+    --text-main:#e2e8f0;
+    --text-muted:#94a3b8;
+    --text-dim:#5b6472;
+    --accent-cyan:#38bdf8;
+    --accent-cyan-dim:rgba(56,189,248,0.35);
+    --accent-green:#22c55e;
+    --accent-blue:#3b82f6;
+    --accent-red:#ef4444;
+    --accent-amber:#f59e0b;
+    --grid-line:rgba(148,163,184,0.07);
+    --grid-line-major:rgba(148,163,184,0.14);
+    --font-mono:'JetBrains Mono','Consolas','Roboto Mono',monospace;
+    --radius:3px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg-app);
+    color:var(--text-main);
+    font-family:var(--font-mono);
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+
+  ::selection{background:var(--accent-cyan-dim);}
+
+  input,button{font-family:var(--font-mono);}
+
+  :focus-visible{
+    outline:2px solid var(--accent-cyan);
+    outline-offset:2px;
+  }
+
+  .app{
+    max-width:1440px;
+    margin:0 auto;
+    padding:18px 20px 40px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+
+  /* ---------- Topbar ---------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 20px;
+    background:var(--bg-panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{
+    font-size:22px;
+    color:var(--accent-cyan);
+    line-height:1;
+    transform:rotate(0deg);
+  }
+  .brand-text h1{
+    margin:0;
+    font-size:15px;
+    letter-spacing:0.14em;
+    font-weight:700;
+    color:var(--text-main);
+  }
+  .brand-text span{
+    display:block;
+    font-size:10.5px;
+    letter-spacing:0.06em;
+    color:var(--text-muted);
+    margin-top:2px;
+  }
+  .status{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:11px;
+    letter-spacing:0.1em;
+    color:var(--text-muted);
+    padding:6px 12px;
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    background:var(--bg-app);
+  }
+  .status-dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--text-dim);
+    box-shadow:0 0 0 0 rgba(0,0,0,0);
+    transition:background .25s ease, box-shadow .25s ease;
+  }
+  .status-dot.idle{background:var(--text-dim);}
+  .status-dot.calc{
+    background:var(--accent-cyan);
+    box-shadow:0 0 8px 1px var(--accent-cyan-dim);
+    animation:pulse 0.9s ease-in-out infinite;
+  }
+  .status-dot.pen{background:var(--accent-green);box-shadow:0 0 8px 1px rgba(34,197,94,.4);}
+  .status-dot.ric{background:var(--accent-blue);box-shadow:0 0 8px 1px rgba(59,130,246,.4);}
+  .status-dot.nop{background:var(--accent-red);box-shadow:0 0 8px 1px rgba(239,68,68,.4);}
+  @keyframes pulse{
+    0%,100%{opacity:1;}
+    50%{opacity:.4;}
+  }
+  
+  .lang-btn{
+    background:var(--bg-panel);
+    border:1px solid var(--border);
+    color:var(--text-muted);
+    border-radius:var(--radius);
+    cursor:pointer;
+    font-size:10px;
+    padding:3px 6px;
+    margin-right:6px;
+    font-weight:700;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .lang-btn:hover{color:var(--text-main);border-color:#3a3f4d;}
+
+  /* ---------- Workspace layout ---------- */
+  .workspace{
+    display:grid;
+    grid-template-columns:296px 1fr;
+    gap:16px;
+    align-items:stretch;
+  }
+  @media (max-width:920px){
+    .workspace{grid-template-columns:1fr;}
+  }
+
+  .panel{
+    background:var(--bg-panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+  }
+
+  /* ---------- Controls ---------- */
+  .controls{
+    padding:16px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    overflow-y:auto;
+  }
+  .ctrl-section{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .ctrl-section + .ctrl-section{
+    border-top:1px solid var(--border-soft);
+    padding-top:16px;
+  }
+  .ctrl-section-title{
+    font-size:10.5px;
+    letter-spacing:0.16em;
+    color:var(--accent-cyan);
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .ctrl-section-title::before{
+    content:"";
+    width:10px;height:1px;
+    background:var(--accent-cyan);
+    display:inline-block;
+  }
+
+  .field{display:flex;flex-direction:column;gap:6px;}
+  .field-label{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    font-size:11px;
+    color:var(--text-muted);
+    letter-spacing:0.03em;
+  }
+  .field-label .field-unit{color:var(--text-dim);font-size:10px;}
+  .field-row{display:flex;align-items:center;gap:8px;}
+
+  input[type="range"]{
+    -webkit-appearance:none;
+    appearance:none;
+    flex:1;
+    height:3px;
+    background:var(--border);
+    border-radius:2px;
+    outline:none;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:13px;height:13px;
+    border-radius:2px;
+    background:var(--accent-cyan);
+    border:2px solid #0b0d11;
+    cursor:pointer;
+    margin-top:0;
+  }
+  input[type="range"]::-moz-range-thumb{
+    width:11px;height:11px;
+    border-radius:2px;
+    background:var(--accent-cyan);
+    border:2px solid #0b0d11;
+    cursor:pointer;
+  }
+  input[type="range"]::-moz-range-track{
+    height:3px;background:var(--border);border-radius:2px;
+  }
+
+  input[type="number"]{
+    width:64px;
+    background:var(--bg-app);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    color:var(--text-main);
+    font-size:12px;
+    padding:5px 6px;
+    text-align:right;
+  }
+  input[type="number"]::-webkit-inner-spin-button{opacity:0.5;}
+
+  .toggle-group{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+  }
+  .toggle-btn{
+    background:var(--bg-app);
+    border:1px solid var(--border);
+    color:var(--text-muted);
+    border-radius:var(--radius);
+    padding:8px 6px;
+    font-size:10.5px;
+    letter-spacing:0.03em;
+    cursor:pointer;
+    transition:border-color .15s ease, color .15s ease, background .15s ease;
+  }
+  .toggle-btn:hover{color:var(--text-main);border-color:#3a3f4d;}
+  .toggle-btn.active{
+    background:rgba(56,189,248,0.08);
+    border-color:var(--accent-cyan);
+    color:var(--accent-cyan);
+  }
+
+  /* ---------- Tank preset picker ---------- */
+  .tank-search{
+    width:100%;
+    background:var(--bg-app);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    color:var(--text-main);
+    font-size:11.5px;
+    padding:7px 9px;
+    margin-bottom:8px;
+  }
+  .tank-search::placeholder{color:var(--text-dim);}
+  .tank-list{
+    max-height:220px;
+    overflow-y:auto;
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    background:var(--bg-app);
+  }
+  .tank-list::-webkit-scrollbar{width:7px;}
+  .tank-list::-webkit-scrollbar-track{background:var(--bg-app);}
+  .tank-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+  .tank-item{border-bottom:1px solid var(--border-soft);}
+  .tank-item:last-child{border-bottom:none;}
+  .tank-name-btn{
+    width:100%;
+    text-align:left;
+    background:transparent;
+    border:none;
+    color:var(--text-main);
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    padding:8px 10px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    transition:background .12s ease, color .12s ease;
+  }
+  .tank-name-btn::before{
+    content:"▸";
+    font-size:9px;
+    color:var(--text-dim);
+    transition:transform .12s ease;
+    flex-shrink:0;
+  }
+  .tank-item.expanded .tank-name-btn::before{
+    transform:rotate(90deg);
+    color:var(--accent-cyan);
+  }
+  .tank-name-btn:hover{background:var(--bg-panel-raised);color:var(--accent-cyan);}
+  .tank-item.has-selection .tank-name-btn{color:var(--accent-cyan);}
+  .tank-sub{
+    display:none;
+    flex-direction:column;
+    padding:0 10px 8px 24px;
+    gap:4px;
+  }
+  .tank-item.expanded .tank-sub{display:flex;}
+  .tank-armor-btn{
+    text-align:left;
+    background:var(--bg-panel);
+    border:1px solid var(--border-soft);
+    border-radius:var(--radius);
+    color:var(--text-muted);
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    padding:6px 9px;
+    cursor:pointer;
+    display:flex;
+    justify-content:space-between;
+    gap:8px;
+    transition:border-color .12s ease, color .12s ease, background .12s ease;
+  }
+  .tank-armor-btn:hover{border-color:#3a3f4d;color:var(--text-main);}
+  .tank-armor-btn.active{
+    background:rgba(56,189,248,0.1);
+    border-color:var(--accent-cyan);
+    color:var(--accent-cyan);
+  }
+  .tank-armor-btn .mm{color:var(--text-dim);font-size:10px;}
+  .tank-armor-btn.active .mm{color:var(--accent-cyan);}
+  .tank-list-empty{
+    padding:14px 10px;
+    font-size:11px;
+    color:var(--text-dim);
+    text-align:center;
+  }
+  .tank-selected{
+    margin-top:10px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    font-size:10.5px;
+    color:var(--text-muted);
+    background:var(--bg-app);
+    border:1px solid var(--border-soft);
+    border-radius:var(--radius);
+    padding:7px 10px;
+  }
+  .tank-selected .lbl{color:var(--accent-cyan);font-weight:700;}
+  .tank-clear-btn{
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--text-dim);
+    border-radius:var(--radius);
+    font-size:9.5px;
+    letter-spacing:0.06em;
+    padding:3px 7px;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .tank-clear-btn:hover{color:var(--text-main);border-color:#3a3f4d;}
+
+  .pen-nudge-btn{
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--text-dim);
+    border-radius:var(--radius);
+    font-size:11px;
+    font-weight:700;
+    padding:6px 8px;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .pen-nudge-btn:hover{color:var(--text-main);border-color:var(--accent-cyan);}
+
+  /* ---------- Gun (shooter) picker — flat single-select list ---------- */
+  .gun-item{border-bottom:1px solid var(--border-soft);}
+  .gun-item:last-child{border-bottom:none;}
+  .gun-btn{
+    width:100%;
+    text-align:left;
+    background:transparent;
+    border:none;
+    color:var(--text-main);
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    padding:8px 10px;
+    cursor:pointer;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+    transition:background .12s ease, color .12s ease;
+  }
+  .gun-btn:hover{background:var(--bg-panel-raised);color:var(--accent-cyan);}
+  .gun-btn.active{background:rgba(56,189,248,0.1);color:var(--accent-cyan);}
+  .gun-btn .mm{color:var(--text-dim);font-size:10px;flex-shrink:0;}
+  .gun-btn.active .mm{color:var(--accent-cyan);}
+
+  .fire-btn{
+    margin-top:4px;
+    background:var(--accent-cyan);
+    color:#04141c;
+    border:none;
+    border-radius:var(--radius);
+    padding:13px 10px;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:0.08em;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    transition:background .15s ease, transform .05s ease;
+  }
+  .fire-btn:hover{background:#5fcaf9;}
+  .fire-btn:active{transform:translateY(1px);}
+  .fire-btn:disabled{background:var(--text-dim);color:#0b0d11;cursor:not-allowed;}
+  .fire-btn-icon{font-size:10px;}
+
+  .video-btn{
+    margin-top:8px;
+    background:transparent;
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:11px 10px;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.07em;
+    color:var(--text-muted);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    transition:border-color .15s ease, color .15s ease, background .15s ease;
+  }
+  .video-btn:hover:not(:disabled){border-color:var(--accent-cyan);color:var(--accent-cyan);}
+  .video-btn:disabled{opacity:0.5;cursor:not-allowed;}
+  .video-btn.recording{border-color:#f87171;color:#f87171;background:rgba(248,113,113,0.06);}
+  .video-btn-icon{font-size:9px;}
+  .video-btn-icon.pulse{animation:recPulse 1s ease-in-out infinite;}
+  @keyframes recPulse{0%,100%{opacity:1;}50%{opacity:0.2;}}
+
+  /* ---------- Viewport ---------- */
+  .viewport{
+    position:relative;
+    min-height:460px;
+    overflow:hidden;
+  }
+  #scene{
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:var(--bg-canvas);
+  }
+  .viewport-hint{
+    position:absolute;
+    left:14px;
+    bottom:12px;
+    font-size:10px;
+    letter-spacing:0.08em;
+    color:var(--text-dim);
+    pointer-events:none;
+  }
+  .viewport-badge{
+    position:absolute;
+    right:14px;
+    top:12px;
+    font-size:10px;
+    letter-spacing:0.1em;
+    color:var(--text-dim);
+    border:1px solid var(--border-soft);
+    padding:4px 8px;
+    border-radius:var(--radius);
+    pointer-events:none;
+  }
+
+  /* ---------- Telemetry ---------- */
+  .telemetry{
+    padding:18px 20px 20px;
+  }
+  .telemetry-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .telemetry-head h2{
+    margin:0;
+    font-size:12px;
+    letter-spacing:0.16em;
+    color:var(--text-main);
+  }
+  .telemetry-head span{
+    font-size:10px;
+    color:var(--text-dim);
+    letter-spacing:0.05em;
+  }
+  .telemetry-placeholder{
+    font-size:12px;
+    color:var(--text-dim);
+    padding:14px 0;
+  }
+  .telemetry-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:0;
+    border:1px solid var(--border-soft);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  @media (max-width:700px){
+    .telemetry-grid{grid-template-columns:1fr;}
+  }
+  .telemetry-row{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    padding:9px 14px;
+    border-bottom:1px solid var(--border-soft);
+    font-size:11.5px;
+  }
+  .telemetry-row:nth-child(odd){border-right:1px solid var(--border-soft);}
+  .telemetry-row .k{color:var(--text-muted);letter-spacing:0.03em;}
+  .telemetry-row .v{color:var(--text-main);font-weight:600;text-align:right;white-space:nowrap;}
+  .telemetry-row .v.amber{color:var(--accent-amber);}
+  .telemetry-row .v.blue{color:var(--accent-blue);}
+  .telemetry-row .v.dim{color:var(--text-dim);font-weight:400;}
+
+  .verdict{
+    margin-top:14px;
+    border-radius:var(--radius);
+    border:1px solid var(--border-soft);
+    border-left:4px solid var(--text-dim);
+    background:var(--bg-panel-raised);
+    padding:14px 18px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .verdict-main{display:flex;flex-direction:column;gap:2px;}
+  .verdict-label{
+    font-size:10px;
+    letter-spacing:0.14em;
+    color:var(--text-dim);
+  }
+  .verdict-value{
+    font-size:22px;
+    font-weight:800;
+    letter-spacing:0.04em;
+  }
+  .verdict-sub{
+    font-size:11px;
+    color:var(--text-muted);
+  }
+  .verdict.pen{border-left-color:var(--accent-green);}
+  .verdict.pen .verdict-value{color:var(--accent-green);}
+  .verdict.ric{border-left-color:var(--accent-blue);}
+  .verdict.ric .verdict-value{color:var(--accent-blue);}
+  .verdict.nop{border-left-color:var(--accent-red);}
+  .verdict.nop .verdict-value{color:var(--accent-red);}
+
+  @media (prefers-reduced-motion:reduce){
+    .status-dot.calc{animation:none;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◈</span>
+      <div class="brand-text">
+        <h1 data-i18n="title">BALLISTIC SANDBOX</h1>
+        <span data-i18n="subtitle">Многоугловой стенд расчёта и визуализации бронепробития</span>
+      </div>
+    </div>
+    <div class="status">
+      <button id="langToggle" class="lang-btn">EN</button>
+      <span class="status-dot idle" id="statusDot"></span>
+      <span id="statusText">ОЖИДАНИЕ</span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="panel controls">
+
+      <div class="ctrl-section">
+        <div class="ctrl-section-title" data-i18n="secShell">СНАРЯД</div>
+
+        <div class="field">
+          <div class="field-label"><span data-i18n="gunPreset">Выбор орудия (по технике)</span></div>
+          <input type="text" class="tank-search" id="gunSearch" data-i18n-placeholder="gunSearchPh" placeholder="Поиск техники…">
+          <div class="tank-list" id="gunList"></div>
+          <div class="tank-selected" id="gunSelected" style="display:none;">
+            <span id="gunSelectedText"></span>
+            <button type="button" class="tank-clear-btn" id="gunClearBtn" data-i18n="tankClear">СБРОС</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><label for="penRange" data-i18n="basePen">Базовое пробитие</label><span class="field-unit" data-i18n-unit="unitMm">мм</span></div>
+          <div class="field-row">
+            <button type="button" class="pen-nudge-btn" id="penMinusBtn">−</button>
+            <input type="range" id="penRange" min="50" max="400" step="1" value="250">
+            <input type="number" id="penNumber" min="50" max="400" step="1" value="250">
+            <button type="button" class="pen-nudge-btn" id="penPlusBtn">+</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><label for="ricRange" data-i18n="ricAngle">Порог рикошета</label><span class="field-unit" data-i18n-unit="unitDeg">град</span></div>
+          <div class="field-row">
+            <button type="button" class="pen-nudge-btn" id="ricMinusBtn">−5</button>
+            <input type="range" id="ricRange" min="45" max="85" step="1" value="70">
+            <input type="number" id="ricNumber" min="45" max="85" step="1" value="70">
+            <button type="button" class="pen-nudge-btn" id="ricPlusBtn">+5</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-section-title" data-i18n="secGeo">ГЕОМЕТРИЯ ВСТРЕЧИ</div>
+
+        <div class="field">
+          <div class="field-label"><label for="shooterRange" data-i18n="shooterAngle">Угол атакующей платформы</label><span class="field-unit" data-i18n-unit="unitDeg">град</span></div>
+          <div class="field-row">
+            <input type="range" id="shooterRange" min="-45" max="45" step="1" value="0">
+            <input type="number" id="shooterNumber" min="-45" max="45" step="1" value="0">
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><label for="hullRange" data-i18n="hullAngle">Наклон корпуса цели</label><span class="field-unit" data-i18n-unit="unitDeg">град</span></div>
+          <div class="field-row">
+            <input type="range" id="hullRange" min="-45" max="45" step="1" value="0">
+            <input type="number" id="hullNumber" min="-45" max="45" step="1" value="0">
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><label for="plateRange" data-i18n="plateAngle">Конструктивный угол плиты</label><span class="field-unit" data-i18n-unit="unitDeg">град</span></div>
+          <div class="field-row">
+            <input type="range" id="plateRange" min="0" max="85" step="1" value="60">
+            <input type="number" id="plateNumber" min="0" max="85" step="1" value="60">
+          </div>
+        </div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-section-title" data-i18n="secTarget">ЦЕЛЬ · ПРЕСЕТ БРОНИ</div>
+
+        <div class="field">
+          <input type="text" class="tank-search" id="tankSearch" data-i18n-placeholder="tankSearchPh" placeholder="Поиск техники…">
+          <div class="tank-list" id="tankList"></div>
+          <div class="tank-selected" id="tankSelected" style="display:none;">
+            <span id="tankSelectedText"></span>
+            <button type="button" class="tank-clear-btn" id="tankClearBtn" data-i18n="tankClear">СБРОС</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-section-title" data-i18n="secPlate">БРОНЕПЛИТА</div>
+
+        <div class="field">
+          <div class="field-label"><label for="thickRange" data-i18n="thickness">Номинальная толщина</label><span class="field-unit" data-i18n-unit="unitMm">мм</span></div>
+          <div class="field-row">
+            <input type="range" id="thickRange" min="10" max="300" step="1" value="100">
+            <input type="number" id="thickNumber" min="10" max="300" step="1" value="100">
+          </div>
+        </div>
+      </div>
+
+      <button class="fire-btn" id="fireBtn">
+        <span class="fire-btn-icon">▶</span> <span data-i18n="btnFire">СМОДЕЛИРОВАТЬ ВЫСТРЕЛ</span>
+      </button>
+
+      <button type="button" class="video-btn" id="videoBtn">
+        <span class="video-btn-icon" id="videoBtnIcon">⏺</span> <span id="videoBtnLabel" data-i18n="btnVideo">СКАЧАТЬ ВИДЕО</span>
+      </button>
+    </aside>
+
+    <section class="panel viewport">
+      <canvas id="scene"></canvas>
+      <span class="viewport-badge" id="viewportBadge">GRID 40mm</span>
+      <span class="viewport-hint">CAD BLUEPRINT VIEW · SIDE PROFILE</span>
+    </section>
+  </main>
+
+  <section class="panel telemetry">
+    <div class="telemetry-head">
+      <h2 data-i18n="reportTitle">ИНЖЕНЕРНЫЙ ОТЧЁТ</h2>
+      <span id="telemetryTimestamp"></span>
+    </div>
+    <div id="telemetryBody">
+      <div class="telemetry-placeholder" data-i18n="phIdle">Настройте параметры и нажмите «Смоделировать выстрел», чтобы получить полный инженерный расчёт.</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============================================================
+     I18N / TRANSLATIONS
+  ============================================================ */
+  const i18n = {
+    ru: {
+      title: "BALLISTIC SANDBOX",
+      subtitle: "Многоугловой стенд расчёта и визуализации бронепробития",
+      statusIdle: "ОЖИДАНИЕ",
+      statusCalc: "РАСЧЁТ ТРАЕКТОРИИ…",
+      statusPen: "ПРОБИТИЕ",
+      statusRic: "РИКОШЕТ",
+      secShell: "СНАРЯД",
+      gunPreset: "Выбор орудия (по технике)",
+      gunSearchPh: "Поиск техники…",
+      gunSelectedPrefix: "Орудие: ",
+      cal: "Калибр",
+      basePen: "Базовое пробитие",
+      ricAngle: "Порог рикошета",
+      secGeo: "ГЕОМЕТРИЯ ВСТРЕЧИ",
+      shooterAngle: "Угол атакующей платформы",
+      hullAngle: "Наклон корпуса цели",
+      plateAngle: "Конструктивный угол плиты",
+      secTarget: "ЦЕЛЬ · ПРЕСЕТ БРОНИ",
+      tankSearchPh: "Поиск техники…",
+      tankNoResults: "Ничего не найдено",
+      tankFront: "Лобовая броня",
+      tankSide: "Бортовая броня",
+      tankSelectedPrefix: "Выбрано: ",
+      tankClear: "СБРОС",
+      secPlate: "БРОНЕПЛИТА",
+      thickness: "Номинальная толщина",
+      btnFire: "СМОДЕЛИРОВАТЬ ВЫСТРЕЛ",
+      btnVideo: "СКАЧАТЬ ВИДЕО",
+      videoRecording: "ЗАПИСЬ АНИМАЦИИ…",
+      videoProcessing: "ОБРАБОТКА ВИДЕО…",
+      videoUnsupported: "Запись видео не поддерживается этим браузером.",
+      overlayTitle: "КОНФИГУРАЦИЯ ВЫСТРЕЛА",
+      overlayTarget: "ЦЕЛЬ",
+      overlayGun: "ОРУДИЕ",
+      overlayManualArmor: "Ручной ввод брони",
+      overlayManualGun: "Ручной ввод орудия",
+      reportTitle: "ИНЖЕНЕРНЫЙ ОТЧЁТ",
+      phIdle: "Настройте параметры и нажмите «Смоделировать выстрел», чтобы получить полный инженерный расчёт.",
+      phCalc: "Выполняется расчёт траектории и соударения…",
+      rowShot: "Глобальный угол снаряда",
+      rowPlate: "Глобальный угол брони",
+      rowTrue: "Истинный угол встречи",
+      rowRic: "Проверка на рикошет (≥{thr}°)",
+      ricYes: "СРАБОТАЛО",
+      ricNo: "не сработало",
+      rowNominal: "Номинальная толщина",
+      rowEff: "Приведённая толщина брони",
+      rowBasePen: "Базовое пробитие снаряда",
+      rowCalType: "Калибр / Тип снаряда",
+      rowDepth: "Глубина проникновения (в броне)",
+      verdictTitle: "ИТОГОВЫЙ ИНЖЕНЕРНЫЙ ВЕРДИКТ",
+      marginPlus: "Запас пробития: +",
+      marginMinus: "Снаряд застрял в броне. Не хватило: ",
+      ricSub: "Угол встречи {ang}° ≥ порога рикошета {thr}°",
+      unitMm: "мм",
+      unitDeg: "град",
+      typeAP: "ББ"
+    },
+    en: {
+      title: "BALLISTIC SANDBOX",
+      subtitle: "Multi-angle armor penetration calculation & visualization",
+      statusIdle: "STANDBY",
+      statusCalc: "CALCULATING TRAJECTORY…",
+      statusPen: "PENETRATION",
+      statusRic: "RICOCHET",
+      secShell: "PROJECTILE",
+      gunPreset: "Select Gun (by vehicle)",
+      gunSearchPh: "Search vehicles…",
+      gunSelectedPrefix: "Gun: ",
+      cal: "Caliber",
+      basePen: "Base Penetration",
+      ricAngle: "Ricochet Threshold",
+      secGeo: "IMPACT GEOMETRY",
+      shooterAngle: "Shooter Platform Angle",
+      hullAngle: "Target Hull Tilt",
+      plateAngle: "Structural Plate Angle",
+      secTarget: "TARGET · ARMOR PRESET",
+      tankSearchPh: "Search vehicles…",
+      tankNoResults: "No matches found",
+      tankFront: "Front Armor",
+      tankSide: "Side Armor",
+      tankSelectedPrefix: "Selected: ",
+      tankClear: "CLEAR",
+      secPlate: "ARMOR PLATE",
+      thickness: "Nominal Thickness",
+      btnFire: "SIMULATE SHOT",
+      btnVideo: "DOWNLOAD VIDEO",
+      videoRecording: "RECORDING ANIMATION…",
+      videoProcessing: "PROCESSING VIDEO…",
+      videoUnsupported: "Video recording is not supported by this browser.",
+      overlayTitle: "SHOT CONFIGURATION",
+      overlayTarget: "TARGET",
+      overlayGun: "GUN",
+      overlayManualArmor: "Manual armor input",
+      overlayManualGun: "Manual gun input",
+      reportTitle: "ENGINEERING REPORT",
+      phIdle: "Configure parameters and click 'Simulate Shot' to get a full engineering report.",
+      phCalc: "Calculating trajectory and impact…",
+      rowShot: "Global Projectile Angle",
+      rowPlate: "Global Armor Angle",
+      rowTrue: "True Impact Angle",
+      rowRic: "Ricochet Check (≥{thr}°)",
+      ricYes: "TRIGGERED",
+      ricNo: "not triggered",
+      rowNominal: "Nominal Thickness",
+      rowEff: "Effective Armor Thickness",
+      rowBasePen: "Base Shell Penetration",
+      rowCalType: "Caliber / Shell Type",
+      rowDepth: "Penetration Depth (along path)",
+      verdictTitle: "FINAL ENGINEERING VERDICT",
+      marginPlus: "Penetration Margin: +",
+      marginMinus: "Shell lodged in armor. Short by: ",
+      ricSub: "Impact angle {ang}° ≥ ricochet threshold {thr}°",
+      unitMm: "mm",
+      unitDeg: "deg",
+      typeAP: "AP"
+    }
+  };
+
+  let currentLang = 'ru';
+  function t(key){ return i18n[currentLang][key] || key; }
+
+  function updateLangUI(){
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    document.querySelectorAll('[data-i18n-unit]').forEach(el => {
+      el.textContent = t(el.getAttribute('data-i18n-unit'));
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
+    });
+    if(typeof renderTankList === 'function') renderTankList(el.tankSearch ? el.tankSearch.value : '');
+    if(typeof refreshTankSelectedLabel === 'function') refreshTankSelectedLabel();
+    if(typeof renderGunList === 'function') renderGunList(el.gunSearch ? el.gunSearch.value : '');
+    if(typeof refreshGunSelectedLabel === 'function') refreshGunSelectedLabel();
+
+    if(scene.phase === 'idle'){
+      setStatus('idle', t('statusIdle'));
+      renderTelemetryPlaceholder();
+    } else if (scene.phase === 'flight') {
+      setStatus('calc', t('statusCalc'));
+      renderTelemetryPlaceholder(true);
+    } else if (scene.phase === 'settled') {
+      const v = scene.result.verdict;
+      if(v === 'PENETRATION') setStatus('pen', t('statusPen'));
+      else if(v === 'RICOCHET') setStatus('ric', t('statusRic'));
+      renderTelemetryReport(scene.result);
+    }
+  }
+
+  /* ============================================================
+     UTILITIES
+  ============================================================ */
+  const DEG2RAD = Math.PI/180;
+  const RAD2DEG = 180/Math.PI;
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function lerp(a,b,t_){ return a + (b-a)*t_; }
+  function easeOutCubic(t_){ return 1 - Math.pow(1-t_, 3); }
+  function easeInCubic(t_){ return t_*t_*t_; }
+
+  function rotateVec(x,y,rad){
+    const c = Math.cos(rad), s = Math.sin(rad);
+    return { x: x*c - y*s, y: x*s + y*c };
+  }
+  function dot(a,b){ return a.x*b.x + a.y*b.y; }
+  function vlen(a){ return Math.sqrt(a.x*a.x + a.y*a.y); }
+  function vnorm(a){ const l = vlen(a) || 1; return { x:a.x/l, y:a.y/l }; }
+  function vscale(a,s){ return { x:a.x*s, y:a.y*s }; }
+  function vadd(a,b){ return { x:a.x+b.x, y:a.y+b.y }; }
+  function vsub(a,b){ return { x:a.x-b.x, y:a.y-b.y }; }
+  function reflect(d,n){
+    const k = 2*dot(d,n);
+    return { x: d.x - k*n.x, y: d.y - k*n.y };
+  }
+
+  /* ============================================================
+     TANK ARMOR PRESETS
+  ============================================================ */
+  const TANKS = [
+    { name: "M88 Greyman", front: 22, side: 18, caliber: 35 },
+    { name: "M61B Butcher", front: 44, side: 34, caliber: 110 },
+    { name: "M61 Half-Track", front: 41, side: 33, caliber: 32 },
+    { name: "P-70 Serf", front: 43, side: 34, caliber: 60 },
+    { name: "CY-76 Longbow", front: 76, side: 60, caliber: 76 },
+    { name: "CY-122 Ursa", front: 73, side: 58, caliber: 122 },
+    { name: "VK-1 Bogatyr", front: 78, side: 60, caliber: 84 },
+    { name: "VK-2 Hammer", front: 78, side: 60, caliber: 119 },
+    { name: "PT-5 Hussar", front: 28, side: 23, caliber: 32 },
+    { name: "P-34/76 Cossack", front: 70, side: 56, caliber: 76 },
+    { name: "P-34/85 Commissar", front: 75, side: 60, caliber: 85 },
+    { name: "ANT-57", front: 44, side: 35, caliber: 75 },
+    { name: "ZAG-MM Tachka", front: 14, side: 11, caliber: 34 },
+    { name: "ZAG-HG Scythe", front: 20, side: 12, caliber: 89 },
+    { name: "Pummeler 2", front: 39, side: 31, caliber: 50 },
+    { name: "Pummeler III", front: 69, side: 55, caliber: 56 },
+    { name: "Heckler", front: 59, side: 36, caliber: 79 },
+    { name: "Hamonag AT", front: 44, side: 35, caliber: 49 },
+    { name: "Cheetah", front: 22, side: 18, caliber: 41 },
+    { name: "Pummeler IV", front: 72, side: 57, caliber: 78 },
+    { name: "Panthera", front: 76, side: 53, caliber: 105 },
+    { name: "Tigress I", front: 77, side: 61, caliber: 116 },
+    { name: "Queen Tigress", front: 81, side: 64, caliber: 120 },
+    { name: "Weevil", front: 77, side: 63, caliber: 86 },
+    { name: "Sturg III", front: 79, side: 63, caliber: 126 },
+    { name: "E1 Starhund", front: 13, side: 10, caliber: 30 },
+    { name: "M5 Stout", front: 47, side: 38, caliber: 60 },
+    { name: "SI-2 Tsar", front: 72, side: 57, caliber: 109 },
+    { name: "Grizzly Mk. 1", front: 63, side: 50, caliber: 75 },
+    { name: "LT Mk. VI", front: 44, side: 35, caliber: 47 },
+    { name: "Hefty Mk. 1", front: 76, side: 60, caliber: 109 },
+    { name: "Haus", front: 101, side: 60, caliber: 150 },
+    { name: "Pike SPG", front: 72, side: 57, caliber: 87 },
+    { name: "C3 Half-Track", front: 38, side: 30, caliber: 84 },
+    { name: "M108 Wolfcat", front: 49, side: 39, caliber: 108 },
+    { name: "Jagsherwin", front: 72, side: 57, caliber: 116 },
+    { name: "M4 Jumbo", front: 77, side: 62, caliber: 113 },
+    { name: "M42 Chuffy", front: 50, side: 40, caliber: 71 },
+    { name: "M70 Beats", front: 77, side: 61, caliber: 122 },
+    { name: "M4 Sherwin", front: 58, side: 46, caliber: 71 },
+    { name: "Stub 3", front: 76, side: 61, caliber: 100 },
+    { name: "Stub 4", front: 73, side: 44, caliber: 113 },
+    { name: "Jagdpanthera", front: 80, side: 55, caliber: 116 }
+  ];
+
+  /* ============================================================
+     STATE
+  ============================================================ */
+  const state = {
+    caliber: 122,
+    basePen: 250,
+    ricAngle: 70,
+    shooterTilt: 0,
+    hullTilt: 0,
+    plateAngle: 60,
+    thickness: 100,
+    selectedTank: null,   // { name, side: 'front'|'side' }
+    expandedTank: null    // index currently expanded in the list
+  };
+
+  const scene = {
+    phase: 'idle',       
+    phaseStart: 0,
+    result: null,        
+    geometry: null,       
+    particles: [],
+    showAnalysis: false,
+    finalShell: null
+  };
+
+  /* ============================================================
+     DOM REFS
+  ============================================================ */
+  const el = {
+    gunSearch: document.getElementById('gunSearch'),
+    gunList: document.getElementById('gunList'),
+    gunSelected: document.getElementById('gunSelected'),
+    gunSelectedText: document.getElementById('gunSelectedText'),
+    gunClearBtn: document.getElementById('gunClearBtn'),
+    penRange: document.getElementById('penRange'),
+    penNumber: document.getElementById('penNumber'),
+    penMinusBtn: document.getElementById('penMinusBtn'),
+    penPlusBtn: document.getElementById('penPlusBtn'),
+    ricRange: document.getElementById('ricRange'),
+    ricNumber: document.getElementById('ricNumber'),
+    ricMinusBtn: document.getElementById('ricMinusBtn'),
+    ricPlusBtn: document.getElementById('ricPlusBtn'),
+    shooterRange: document.getElementById('shooterRange'),
+    shooterNumber: document.getElementById('shooterNumber'),
+    hullRange: document.getElementById('hullRange'),
+    hullNumber: document.getElementById('hullNumber'),
+    plateRange: document.getElementById('plateRange'),
+    plateNumber: document.getElementById('plateNumber'),
+    thickRange: document.getElementById('thickRange'),
+    thickNumber: document.getElementById('thickNumber'),
+    tankSearch: document.getElementById('tankSearch'),
+    tankList: document.getElementById('tankList'),
+    tankSelected: document.getElementById('tankSelected'),
+    tankSelectedText: document.getElementById('tankSelectedText'),
+    tankClearBtn: document.getElementById('tankClearBtn'),
+    fireBtn: document.getElementById('fireBtn'),
+    videoBtn: document.getElementById('videoBtn'),
+    videoBtnIcon: document.getElementById('videoBtnIcon'),
+    videoBtnLabel: document.getElementById('videoBtnLabel'),
+    canvas: document.getElementById('scene'),
+    statusDot: document.getElementById('statusDot'),
+    statusText: document.getElementById('statusText'),
+    telemetryBody: document.getElementById('telemetryBody'),
+    telemetryTimestamp: document.getElementById('telemetryTimestamp'),
+    viewportBadge: document.getElementById('viewportBadge'),
+    langBtn: document.getElementById('langToggle')
+  };
+
+  const ctx = el.canvas.getContext('2d');
+
+  /* ============================================================
+     EVENT LISTENERS
+  ============================================================ */
+  let idleRedrawScheduled = false;
+
+  function scheduleIdleRedraw(){
+    if(idleRedrawScheduled) return;
+    idleRedrawScheduled = true;
+    requestAnimationFrame(()=>{
+      idleRedrawScheduled = false;
+      if(scene.phase==='idle'){
+        scene.geometry = buildGeometry(state, computeShot(state));
+      }
+    });
+  }
+
+  function onLiveChange(){
+    if(scene.phase !== 'idle'){
+      resetToIdle();
+    }
+    scheduleIdleRedraw();
+  }
+
+  function bindPair(rangeEl, numberEl, stateKey, onChange){
+    function apply(val){
+      val = clamp(Number(val)||0, Number(rangeEl.min), Number(rangeEl.max));
+      rangeEl.value = val;
+      numberEl.value = val;
+      state[stateKey] = val;
+      onChange && onChange();
+    }
+    rangeEl.addEventListener('input', ()=> apply(rangeEl.value));
+    numberEl.addEventListener('input', ()=> apply(numberEl.value));
+    numberEl.addEventListener('blur', ()=> apply(numberEl.value));
+    apply(rangeEl.value);
+    return apply;
+  }
+
+  /* ---------- Gun (shooter) picker ---------- */
+  state.selectedGun = null;
+
+  function selectGun(idx){
+    const tank = TANKS[idx];
+    state.caliber = tank.caliber;
+    state.selectedGun = { idx, name: tank.name };
+    const suggestedPen = suggestBasePen(tank.caliber);
+    setPenBounds(suggestedPen);
+    applyBasePen(suggestedPen);
+    const suggestedRic = suggestRicAngle(tank.caliber, suggestedPen);
+    setRicBounds(suggestedRic);
+    applyRicAngle(suggestedRic);
+    refreshGunSelectedLabel();
+    renderGunList(el.gunSearch.value);
+  }
+
+  function clearGunSelection(){
+    if(!state.selectedGun) return;
+    state.selectedGun = null;
+    el.penRange.min = PEN_ABS_MIN;
+    el.penRange.max = PEN_ABS_MAX;
+    el.penNumber.min = PEN_ABS_MIN;
+    el.penNumber.max = PEN_ABS_MAX;
+    el.ricRange.min = RIC_ABS_MIN;
+    el.ricRange.max = RIC_ABS_MAX;
+    el.ricNumber.min = RIC_ABS_MIN;
+    el.ricNumber.max = RIC_ABS_MAX;
+    refreshGunSelectedLabel();
+    renderGunList(el.gunSearch.value);
+  }
+
+  function renderGunList(filter){
+    const q = (filter||'').trim().toLowerCase();
+    const frag = document.createDocumentFragment();
+    let any = false;
+
+    const sorted = TANKS
+      .map((tank, idx) => ({ tank, idx }))
+      .filter(({tank}) => !q || tank.name.toLowerCase().includes(q))
+      .sort((a, b) => b.tank.caliber - a.tank.caliber);
+
+    sorted.forEach(({tank, idx})=>{
+      any = true;
+
+      const item = document.createElement('div');
+      item.className = 'gun-item';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gun-btn';
+      if(state.selectedGun && state.selectedGun.idx === idx) btn.classList.add('active');
+      btn.innerHTML = '<span>'+tank.name+'</span><span class="mm">'+tank.caliber+' '+t('unitMm')+'</span>';
+      btn.addEventListener('click', ()=> selectGun(idx));
+
+      item.appendChild(btn);
+      frag.appendChild(item);
+    });
+
+    if(!any){
+      const empty = document.createElement('div');
+      empty.className = 'tank-list-empty';
+      empty.textContent = t('tankNoResults');
+      frag.appendChild(empty);
+    }
+
+    el.gunList.innerHTML = '';
+    el.gunList.appendChild(frag);
+  }
+
+  function refreshGunSelectedLabel(){
+    if(state.selectedGun){
+      el.gunSelectedText.textContent = t('gunSelectedPrefix') + state.selectedGun.name + ' — ' + state.caliber + ' ' + t('unitMm');
+      el.gunSelected.style.display = 'flex';
+    } else {
+      el.gunSelected.style.display = 'none';
+    }
+  }
+
+  el.gunSearch.addEventListener('input', ()=> renderGunList(el.gunSearch.value));
+  el.gunClearBtn.addEventListener('click', clearGunSelection);
+
+  renderGunList('');
+  refreshGunSelectedLabel();
+
+  // Bind the base-pen control first so applyBasePen already exists when the
+  // default gun preset below tries to auto-suggest a penetration value.
+  const applyBasePen = bindPair(el.penRange, el.penNumber, 'basePen', onLiveChange);
+
+  // Absolute limits of the control, captured before we start narrowing them
+  // per-caliber below (so re-narrowing never compounds on itself).
+  const PEN_ABS_MIN = Number(el.penRange.min);
+  const PEN_ABS_MAX = Number(el.penRange.max);
+
+  // Rough AP penetration curve keyed to caliber (mm bore -> mm RHA base pen).
+  // Real-world AP penetration isn't perfectly linear with bore diameter, but
+  // for a caliber-only estimate a straight line is a fair approximation.
+  // Calibrated so it lands on the app's original 122mm -> 250mm reference point.
+  function suggestBasePen(caliber){
+    const raw = caliber * 2.12 - 8.6;
+    return clamp(Math.round(raw), PEN_ABS_MIN, PEN_ABS_MAX);
+  }
+
+  // Once a gun/caliber is picked, the base pen is only adjustable +-15mm
+  // around the auto-suggested value (ammo-batch variance), not the full range.
+  function setPenBounds(center){
+    const lo = clamp(center - 15, PEN_ABS_MIN, PEN_ABS_MAX);
+    const hi = clamp(center + 15, PEN_ABS_MIN, PEN_ABS_MAX);
+    el.penRange.min = lo;
+    el.penRange.max = hi;
+    el.penNumber.min = lo;
+    el.penNumber.max = hi;
+  }
+
+  el.penMinusBtn.addEventListener('click', ()=> applyBasePen(state.basePen - 15));
+  el.penPlusBtn.addEventListener('click', ()=> applyBasePen(state.basePen + 15));
+
+  // Bind the ricochet-threshold control the same way as base pen.
+  const applyRicAngle = bindPair(el.ricRange, el.ricNumber, 'ricAngle', onLiveChange);
+
+  const RIC_ABS_MIN = Number(el.ricRange.min);
+  const RIC_ABS_MAX = Number(el.ricRange.max);
+
+  // Bigger/heavier shells carry more energy and resist ricochet up to a
+  // steeper angle; higher penetration (more velocity/mass) pushes it up too.
+  // Rough estimate only — clamped to a sane 45-85° band.
+  function suggestRicAngle(caliber, basePen){
+    const raw = 40 + caliber * 0.12 + basePen * 0.08;
+    return clamp(Math.round(raw), RIC_ABS_MIN, RIC_ABS_MAX);
+  }
+
+  // Once a gun/caliber is picked, the ricochet threshold is only adjustable
+  // +-5° around the auto-suggested value, not the full range.
+  function setRicBounds(center){
+    const lo = clamp(center - 5, RIC_ABS_MIN, RIC_ABS_MAX);
+    const hi = clamp(center + 5, RIC_ABS_MIN, RIC_ABS_MAX);
+    el.ricRange.min = lo;
+    el.ricRange.max = hi;
+    el.ricNumber.min = lo;
+    el.ricNumber.max = hi;
+  }
+
+  el.ricMinusBtn.addEventListener('click', ()=> applyRicAngle(state.ricAngle - 5));
+  el.ricPlusBtn.addEventListener('click', ()=> applyRicAngle(state.ricAngle + 5));
+
+  // Default shooter preset: keeps the original default caliber (122mm) consistent with CY-122 Ursa
+  (function initDefaultGun(){
+    const defaultIdx = TANKS.findIndex(tk => tk.caliber === state.caliber);
+    if(defaultIdx !== -1) selectGun(defaultIdx);
+  })();
+
+  bindPair(el.shooterRange, el.shooterNumber, 'shooterTilt', onLiveChange);
+  bindPair(el.hullRange, el.hullNumber, 'hullTilt', onLiveChange);
+  bindPair(el.plateRange, el.plateNumber, 'plateAngle', onLiveChange);
+  bindPair(el.thickRange, el.thickNumber, 'thickness', onLiveChange);
+
+  /* ---------- Tank preset picker ---------- */
+  let suppressTankClear = false;
+
+  function clearTankSelection(){
+    if(!state.selectedTank) return;
+    state.selectedTank = null;
+    refreshTankSelectedLabel();
+    renderTankList(el.tankSearch.value);
+  }
+
+  el.thickRange.addEventListener('input', ()=>{ if(!suppressTankClear) clearTankSelection(); });
+  el.thickNumber.addEventListener('input', ()=>{ if(!suppressTankClear) clearTankSelection(); });
+
+  function selectTankArmor(idx, side){
+    const tank = TANKS[idx];
+    const val = side === 'front' ? tank.front : tank.side;
+    suppressTankClear = true;
+    el.thickRange.value = val;
+    el.thickRange.dispatchEvent(new Event('input'));
+    suppressTankClear = false;
+
+    state.selectedTank = { idx, name: tank.name, side };
+    state.expandedTank = idx;
+    refreshTankSelectedLabel();
+    renderTankList(el.tankSearch.value);
+  }
+
+  function renderTankList(filter){
+    const q = (filter||'').trim().toLowerCase();
+    const frag = document.createDocumentFragment();
+    let any = false;
+
+    const sorted = TANKS
+      .map((tank, idx) => ({ tank, idx }))
+      .filter(({tank}) => !q || tank.name.toLowerCase().includes(q))
+      .sort((a, b) => b.tank.front - a.tank.front || b.tank.side - a.tank.side);
+
+    sorted.forEach(({tank, idx})=>{
+      any = true;
+
+      const item = document.createElement('div');
+      item.className = 'tank-item';
+      if(state.expandedTank === idx) item.classList.add('expanded');
+      if(state.selectedTank && state.selectedTank.idx === idx) item.classList.add('has-selection');
+
+      const nameBtn = document.createElement('button');
+      nameBtn.type = 'button';
+      nameBtn.className = 'tank-name-btn';
+      nameBtn.textContent = tank.name;
+      nameBtn.addEventListener('click', ()=>{
+        state.expandedTank = (state.expandedTank === idx) ? null : idx;
+        renderTankList(el.tankSearch.value);
+      });
+
+      const sub = document.createElement('div');
+      sub.className = 'tank-sub';
+
+      const frontBtn = document.createElement('button');
+      frontBtn.type = 'button';
+      frontBtn.className = 'tank-armor-btn';
+      if(state.selectedTank && state.selectedTank.idx===idx && state.selectedTank.side==='front') frontBtn.classList.add('active');
+      frontBtn.innerHTML = '<span>'+t('tankFront')+'</span><span class="mm">'+tank.front+' '+t('unitMm')+'</span>';
+      frontBtn.addEventListener('click', (e)=>{ e.stopPropagation(); selectTankArmor(idx, 'front'); });
+
+      const sideBtn = document.createElement('button');
+      sideBtn.type = 'button';
+      sideBtn.className = 'tank-armor-btn';
+      if(state.selectedTank && state.selectedTank.idx===idx && state.selectedTank.side==='side') sideBtn.classList.add('active');
+      sideBtn.innerHTML = '<span>'+t('tankSide')+'</span><span class="mm">'+tank.side+' '+t('unitMm')+'</span>';
+      sideBtn.addEventListener('click', (e)=>{ e.stopPropagation(); selectTankArmor(idx, 'side'); });
+
+      sub.appendChild(frontBtn);
+      sub.appendChild(sideBtn);
+      item.appendChild(nameBtn);
+      item.appendChild(sub);
+      frag.appendChild(item);
+    });
+
+    if(!any){
+      const empty = document.createElement('div');
+      empty.className = 'tank-list-empty';
+      empty.textContent = t('tankNoResults');
+      frag.appendChild(empty);
+    }
+
+    el.tankList.innerHTML = '';
+    el.tankList.appendChild(frag);
+  }
+
+  function refreshTankSelectedLabel(){
+    if(state.selectedTank){
+      const sideLabel = state.selectedTank.side === 'front' ? t('tankFront') : t('tankSide');
+      el.tankSelectedText.textContent = t('tankSelectedPrefix') + state.selectedTank.name + ' — ' + sideLabel;
+      el.tankSelected.style.display = 'flex';
+    } else {
+      el.tankSelected.style.display = 'none';
+    }
+  }
+
+  el.tankSearch.addEventListener('input', ()=> renderTankList(el.tankSearch.value));
+  el.tankClearBtn.addEventListener('click', clearTankSelection);
+
+  renderTankList('');
+  refreshTankSelectedLabel();
+
+  el.fireBtn.addEventListener('click', fireShot);
+
+  /* ---------- Download animation as video ---------- */
+  let isRecordingVideo = false;
+
+  function setVideoBtnLabel(text){
+    el.videoBtnLabel.textContent = text;
+  }
+
+  function slugify(str){
+    return str.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-+|-+$)/g,'') || 'x';
+  }
+
+  function extensionForMime(mime){
+    return (mime && mime.indexOf('mp4') !== -1) ? 'mp4' : 'webm';
+  }
+
+  function buildVideoFilename(mimeType){
+    const gunPart = state.selectedGun ? slugify(state.selectedGun.name) : 'manual-gun';
+    const tankPart = state.selectedTank ? slugify(state.selectedTank.name) + '-' + state.selectedTank.side : 'manual-armor';
+    const verdictPart = scene.result ? scene.result.verdict.toLowerCase() : 'shot';
+    const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    const ext = extensionForMime(mimeType);
+    return `stugio-sim_${gunPart}_vs_${tankPart}_${verdictPart}_${stamp}.${ext}`;
+  }
+
+  function resetVideoBtnState(){
+    isRecordingVideo = false;
+    el.fireBtn.disabled = false;
+    el.videoBtn.disabled = false;
+    el.videoBtn.classList.remove('recording');
+    el.videoBtnIcon.classList.remove('pulse');
+    setVideoBtnLabel(t('btnVideo'));
+  }
+
+  function startVideoRecording(){
+    if(isRecordingVideo) return;
+
+    if(!('MediaRecorder' in window) || typeof el.canvas.captureStream !== 'function'){
+      alert(t('videoUnsupported'));
+      return;
+    }
+
+    isRecordingVideo = true;
+    el.fireBtn.disabled = true;
+    el.videoBtn.disabled = true;
+    el.videoBtn.classList.add('recording');
+    el.videoBtnIcon.classList.add('pulse');
+    setVideoBtnLabel(t('videoRecording'));
+
+    const stream = el.canvas.captureStream(30);
+    // mp4/H.264 first: plays natively everywhere (Discord, phones, media players).
+    // Falls back to webm only on browsers that can't encode mp4.
+    const mimeCandidates = [
+      'video/mp4;codecs=avc1',
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm'
+    ];
+    const mimeType = mimeCandidates.find(m => window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(m)) || '';
+    let recorder;
+    try{
+      recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 6000000 })
+        : new MediaRecorder(stream, { videoBitsPerSecond: 6000000 });
+    } catch(err){
+      resetVideoBtnState();
+      alert(t('videoUnsupported'));
+      return;
+    }
+
+    const chunks = [];
+    recorder.ondataavailable = (e)=>{ if(e.data && e.data.size) chunks.push(e.data); };
+
+    recorder.onerror = ()=>{
+      resetVideoBtnState();
+      alert(t('videoUnsupported'));
+    };
+
+    recorder.onstop = ()=>{
+      setVideoBtnLabel(t('videoProcessing'));
+
+      if(!chunks.length){
+        resetVideoBtnState();
+        alert(t('videoUnsupported'));
+        return;
+      }
+
+      // Use the recorder's actual mimeType (browser may pick a different one
+      // than requested) so the file extension always matches the real content.
+      const actualType = recorder.mimeType || mimeType || 'video/webm';
+      const blob = new Blob(chunks, { type: actualType });
+
+      if(!blob.size){
+        resetVideoBtnState();
+        alert(t('videoUnsupported'));
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      const filename = buildVideoFilename(actualType);
+
+      const ua = navigator.userAgent || '';
+      const isIOS = /iP(hone|od|ad)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
+
+      if(navigator.msSaveOrOpenBlob){
+        // Legacy Edge/IE: has its own save API, the download attribute doesn't apply.
+        navigator.msSaveOrOpenBlob(blob, filename);
+      } else if(isIOS || isSafari){
+        // Safari (especially iOS) largely ignores the anchor "download" attribute
+        // for blob URLs and just navigates instead. Opening it directly lets
+        // people save the video via the Share sheet / long-press "Save Video".
+        window.open(url, '_blank');
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
+      setTimeout(()=> URL.revokeObjectURL(url), 10000);
+
+      resetVideoBtnState();
+    };
+
+    recorder.start(200);
+    fireShot();
+
+    const impactDur = scene.result.verdict === 'PENETRATION' ? 900 : 550;
+    const totalMs = 550 /* flight */ + impactDur + 1800 /* settled hold */;
+
+    setTimeout(()=>{
+      if(recorder.state !== 'inactive') recorder.stop();
+    }, totalMs);
+  }
+
+  el.videoBtn.addEventListener('click', startVideoRecording);
+  
+  el.langBtn.addEventListener('click', () => {
+    currentLang = currentLang === 'ru' ? 'en' : 'ru';
+    el.langBtn.textContent = currentLang === 'ru' ? 'EN' : 'RU';
+    updateLangUI();
+  });
+
+  // Init translations explicitly
+  updateLangUI();
+
+  /* ============================================================
+     PHYSICS 
+  ============================================================ */
+  function computeShot(s){
+    const plateTiltDeg = s.hullTilt + s.plateAngle;
+    const shotTiltDeg  = s.shooterTilt;
+
+    const rawSum   = plateTiltDeg + shotTiltDeg;
+    const trueAngle = Math.min(Math.abs(rawSum), 90);
+
+    const ricochet = (trueAngle >= s.ricAngle);
+
+    const safeAngle = Math.min(trueAngle, 89.9);
+    const effectiveThickness = s.thickness / Math.cos(safeAngle*DEG2RAD);
+
+    let verdict;
+    if(ricochet) verdict = 'RICOCHET';
+    else verdict = 'PENETRATION';
+
+    const margin = s.basePen - effectiveThickness;
+
+    return {
+      plateTiltDeg, shotTiltDeg, trueAngle,
+      ricochet, effectiveThickness, verdict, margin, ricAngle: s.ricAngle,
+      caliber: s.caliber, basePen: s.basePen, thickness: s.thickness
+    };
+  }
+
+  /* ============================================================
+     SCENE GEOMETRY
+  ============================================================ */
+  function buildGeometry(s, result){
+    const w = el.canvas.clientWidth, h = el.canvas.clientHeight;
+    const contact = { x: w*0.60, y: h*0.52 };
+
+    const plateTiltRad = result.plateTiltDeg * DEG2RAD;
+    const shotTiltRad  = s.shooterTilt * DEG2RAD;
+
+    const normal = { x: -Math.cos(plateTiltRad), y: -Math.sin(plateTiltRad) };
+    const travelDir = vnorm({ x: Math.cos(shotTiltRad), y: -Math.sin(shotTiltRad) });
+
+    const travelDist = Math.min(w,h) * 0.62;
+    const start = vsub(contact, vscale(travelDir, travelDist));
+
+    const thicknessPx = clamp(s.thickness * 0.55, 8, 130);
+    const plateLength = Math.min(w,h) * 0.6;
+
+    const lenAxis = { x: -normal.y, y: normal.x };
+    const backCenter = vsub(contact, vscale(normal, thicknessPx));
+    const corners = [
+      vadd(contact,     vscale(lenAxis,  plateLength/2)),
+      vadd(contact,     vscale(lenAxis, -plateLength/2)),
+      vadd(backCenter,  vscale(lenAxis, -plateLength/2)),
+      vadd(backCenter,  vscale(lenAxis,  plateLength/2))
+    ];
+
+    return { contact, normal, travelDir, start, thicknessPx, plateLength, corners, plateTiltRad };
+  }
+
+  /* ============================================================
+     PARTICLES
+  ============================================================ */
+  function spawnFragmentCone(origin, dir){
+    const n = reduceMotion ? 0 : 26;
+    const base = Math.atan2(dir.y, dir.x);
+    for(let i=0;i<n;i++){
+      const spread = (Math.random()-0.5) * (28*DEG2RAD);
+      const ang = base + spread;
+      const spd = 140 + Math.random()*220;
+      scene.particles.push({
+        x:origin.x, y:origin.y,
+        vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
+        life:1, decay: 0.9 + Math.random()*0.8,
+        size: 1 + Math.random()*2.4,
+        color: Math.random()>0.4 ? '#94a3b8' : '#e2e8f0',
+        kind:'frag'
+      });
+    }
+  }
+  function spawnDeflectionDust(origin){
+    const n = reduceMotion ? 0 : 10;
+    for(let i=0;i<n;i++){
+      const ang = Math.random()*Math.PI*2;
+      const spd = 20 + Math.random()*40;
+      scene.particles.push({
+        x:origin.x, y:origin.y,
+        vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
+        life:1, decay: 1.6 + Math.random()*1.2,
+        size: 1 + Math.random()*1.6,
+        color:'#5b6472',
+        kind:'dust'
+      });
+    }
+  }
+  function spawnStuckSparks(origin, dir){
+    // Короткая, плотная вспышка искр и стружки в точке входа —
+    // снаряд застрял, а не прошёл насквозь, поэтому сноп летит НАЗАД, к стрелку.
+    const backBase = Math.atan2(-dir.y, -dir.x);
+    const nSparks = reduceMotion ? 0 : 18;
+    for(let i=0;i<nSparks;i++){
+      const spread = (Math.random()-0.5) * (110*DEG2RAD);
+      const ang = backBase + spread;
+      const spd = 70 + Math.random()*170;
+      scene.particles.push({
+        x:origin.x, y:origin.y,
+        vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
+        life:1, decay: 1.8 + Math.random()*1.6,
+        size: 0.8 + Math.random()*1.6,
+        color: Math.random()>0.45 ? '#f59e0b' : '#fde68a',
+        kind:'spark'
+      });
+    }
+    const nShavings = reduceMotion ? 0 : 8;
+    for(let i=0;i<nShavings;i++){
+      const spread = (Math.random()-0.5) * (150*DEG2RAD);
+      const ang = backBase + spread;
+      const spd = 25 + Math.random()*55;
+      scene.particles.push({
+        x:origin.x, y:origin.y,
+        vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
+        life:1, decay: 1.1 + Math.random()*0.9,
+        size: 1 + Math.random()*1.8,
+        color:'#94a3b8',
+        kind:'shaving'
+      });
+    }
+  }
+  function updateParticles(dt){
+    for(let i=scene.particles.length-1;i>=0;i--){
+      const p = scene.particles[i];
+      p.x += p.vx*dt; p.y += p.vy*dt;
+      p.vx *= 0.98; p.vy = p.vy*0.98 + 30*dt;
+      p.life -= p.decay*dt;
+      if(p.life<=0) scene.particles.splice(i,1);
+    }
+  }
+  function drawParticles(){
+    scene.particles.forEach(p=>{
+      ctx.globalAlpha = clamp(p.life,0,1);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  /* ============================================================
+     DRAWING
+  ============================================================ */
+  function resizeCanvas(){
+    const dpr = window.devicePixelRatio || 1;
+    const w = el.canvas.clientWidth, h = el.canvas.clientHeight;
+    el.canvas.width = Math.round(w*dpr);
+    el.canvas.height = Math.round(h*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function drawGrid(){
+    const w = el.canvas.clientWidth, h = el.canvas.clientHeight;
+    ctx.fillStyle = '#0f1115';
+    ctx.fillRect(0,0,w,h);
+    const step = 40;
+    ctx.lineWidth = 1;
+    for(let x=0; x<=w; x+=step){
+      const major = (x/step) % 5 === 0;
+      ctx.strokeStyle = major ? 'rgba(148,163,184,0.14)' : 'rgba(148,163,184,0.07)';
+      ctx.beginPath(); ctx.moveTo(x+0.5,0); ctx.lineTo(x+0.5,h); ctx.stroke();
+    }
+    for(let y=0; y<=h; y+=step){
+      const major = (y/step) % 5 === 0;
+      ctx.strokeStyle = major ? 'rgba(148,163,184,0.14)' : 'rgba(148,163,184,0.07)';
+      ctx.beginPath(); ctx.moveTo(0,y+0.5); ctx.lineTo(w,y+0.5); ctx.stroke();
+    }
+  }
+
+  function drawPlate(geo, tint){
+    const c = geo.corners;
+    ctx.beginPath();
+    ctx.moveTo(c[0].x, c[0].y);
+    for(let i=1;i<c.length;i++) ctx.lineTo(c[i].x, c[i].y);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(c[0].x,c[0].y,c[2].x,c[2].y);
+    grad.addColorStop(0, tint || '#3a4150');
+    grad.addColorStop(1, '#20242c');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = '#5b6472';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(148,163,184,0.12)';
+    ctx.lineWidth = 1;
+    const lenAxis = { x:-geo.normal.y, y:geo.normal.x };
+    const hatchCount = Math.max(3, Math.round(geo.thicknessPx/14));
+    for(let i=-hatchCount;i<=hatchCount;i++){
+      const t_ = i*14;
+      const p0 = vadd(vadd(geo.contact, vscale(lenAxis, t_)), vscale(geo.normal, 40));
+      const p1 = vsub(vadd(geo.contact, vscale(lenAxis, t_-60)), vscale(geo.normal, geo.thicknessPx+40));
+      ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawTrajectory(geo, tProgress, dashed){
+    const p0 = geo.start;
+    const p1 = geo.contact;
+    ctx.save();
+    if(dashed) ctx.setLineDash([6,5]);
+    ctx.strokeStyle = dashed ? 'rgba(148,163,184,0.35)' : '#38bdf8';
+    ctx.lineWidth = dashed ? 1 : 2;
+    ctx.beginPath();
+    ctx.moveTo(p0.x,p0.y);
+    const end = tProgress===undefined ? p1 : { x:lerp(p0.x,p1.x,tProgress), y:lerp(p0.y,p1.y,tProgress) };
+    ctx.lineTo(end.x,end.y);
+    ctx.stroke();
+    ctx.restore();
+    return end;
+  }
+
+  function drawShellMarker(pos, dir){
+    const len = 16;
+    const back = vsub(pos, vscale(dir, len));
+    ctx.save();
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(back.x, back.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(pos.x,pos.y,2.6,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawStuckShell(geo, finalShell){
+    const entry = geo.contact;
+    const dir = finalShell.dir;
+    const tipDepth = clamp(vlen(vsub(finalShell.pos, entry)), 9, geo.thicknessPx + 14);
+    const tip = vadd(entry, vscale(dir, tipDepth));
+
+    ctx.save();
+
+    // Кратер/скол в точке входа — постоянная деформация плиты
+    const craterR = 15;
+    const crGrad = ctx.createRadialGradient(entry.x, entry.y, 0.5, entry.x, entry.y, craterR);
+    crGrad.addColorStop(0, 'rgba(8,8,10,0.88)');
+    crGrad.addColorStop(0.5, 'rgba(45,32,20,0.42)');
+    crGrad.addColorStop(1, 'rgba(45,32,20,0)');
+    ctx.fillStyle = crGrad;
+    ctx.beginPath();
+    ctx.arc(entry.x, entry.y, craterR, 0, Math.PI*2);
+    ctx.fill();
+
+    // Радиальные трещины/сколы вокруг кратера
+    ctx.strokeStyle = 'rgba(15,15,15,0.5)';
+    ctx.lineWidth = 1;
+    const crackSeed = Math.round(entry.x*3 + entry.y*7); // стабильно между кадрами
+    for(let i=0;i<5;i++){
+      const ang = (crackSeed + i*73) % 360 * DEG2RAD;
+      const r0 = craterR*0.35, r1 = craterR*(0.85 + ((crackSeed+i*17)%40)/100);
+      ctx.beginPath();
+      ctx.moveTo(entry.x+Math.cos(ang)*r0, entry.y+Math.sin(ang)*r0);
+      ctx.lineTo(entry.x+Math.cos(ang)*r1, entry.y+Math.sin(ang)*r1);
+      ctx.stroke();
+    }
+
+    // Погружённый в броню ствол снаряда — обрезаем по контуру плиты,
+    // чтобы он не "торчал" сквозь заднюю грань, если глубина проникновения мала
+    ctx.save();
+    ctx.beginPath();
+    const c = geo.corners;
+    ctx.moveTo(c[0].x, c[0].y);
+    for(let i=1;i<c.length;i++) ctx.lineTo(c[i].x, c[i].y);
+    ctx.closePath();
+    ctx.clip();
+
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(entry.x, entry.y);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.stroke();
+
+    // Тонкая тёмная грань вдоль ствола — эффект объёма
+    ctx.strokeStyle = 'rgba(11,13,17,0.55)';
+    ctx.lineWidth = 1;
+    const side = { x:-dir.y, y:dir.x };
+    ctx.beginPath();
+    ctx.moveTo(entry.x + side.x*1.1, entry.y + side.y*1.1);
+    ctx.lineTo(tip.x + side.x*1.1, tip.y + side.y*1.1);
+    ctx.stroke();
+
+    // Деформированный (расплющенный) наконечник на упоре
+    ctx.fillStyle = '#94a3b8';
+    ctx.beginPath();
+    ctx.ellipse(tip.x, tip.y, 3.6, 2.4, Math.atan2(dir.y,dir.x), 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#0b0d11';
+    ctx.lineWidth = 0.75;
+    ctx.stroke();
+    ctx.restore();
+
+    // Открытый срез гильзы/корпуса в точке входа, слегка выступающий над поверхностью брони
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.arc(entry.x, entry.y, 3, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#0b0d11';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function roundRectPath(cx,x,y,w,h,r){
+    cx.beginPath();
+    cx.moveTo(x+r,y);
+    cx.arcTo(x+w,y,x+w,y+h,r);
+    cx.arcTo(x+w,y+h,x,y+h,r);
+    cx.arcTo(x,y+h,x,y,r);
+    cx.arcTo(x,y,x+w,y,r);
+    cx.closePath();
+  }
+
+  function drawConfigOverlay(geo, res, phase){
+    const w = el.canvas.clientWidth;
+
+    const targetLabel = state.selectedTank
+      ? state.selectedTank.name + ' — ' + (state.selectedTank.side==='front' ? t('tankFront') : t('tankSide'))
+      : t('overlayManualArmor');
+    const gunLabel = state.selectedGun
+      ? state.selectedGun.name + ' — ' + state.caliber + ' ' + t('unitMm')
+      : t('overlayManualGun');
+
+    const lines = [
+      { k: t('overlayTarget'), v: targetLabel },
+      { k: t('overlayGun'), v: gunLabel + ' · ' + t('typeAP') },
+      { k: t('rowNominal'), v: state.thickness + ' ' + t('unitMm') },
+      { k: t('rowEff'), v: res.effectiveThickness.toFixed(1) + ' ' + t('unitMm'), hi:true },
+      { k: t('rowTrue'), v: res.trueAngle.toFixed(1) + '°' }
+    ];
+
+    if(phase === 'settled'){
+      lines.push({ k: t('verdictTitle'), v: res.verdict==='PENETRATION' ? t('statusPen') : t('statusRic'), verdict:true });
+    }
+
+    ctx.save();
+    ctx.font = '600 10px "JetBrains Mono", monospace';
+    let maxW = 0;
+    lines.forEach(l=>{
+      const wLine = ctx.measureText(l.k + '   ' + l.v).width;
+      if(wLine > maxW) maxW = wLine;
+    });
+
+    const padX = 12, titleH = 20, lineH = 15, padBottom = 8;
+    const boxW = Math.min(maxW + padX*2, w - 24);
+    const boxH = titleH + lines.length*lineH + padBottom;
+    const x = 12, y = 12;
+
+    ctx.fillStyle = 'rgba(10,12,16,0.74)';
+    ctx.strokeStyle = 'rgba(56,189,248,0.35)';
+    ctx.lineWidth = 1;
+    roundRectPath(ctx, x, y, boxW, boxH, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '700 9.5px "JetBrains Mono", monospace';
+    ctx.fillText(t('overlayTitle'), x+padX, y+7);
+
+    ctx.font = '500 10px "JetBrains Mono", monospace';
+    lines.forEach((l, i)=>{
+      const ly = y + titleH + i*lineH + 3;
+      ctx.fillStyle = '#8b93a3';
+      ctx.fillText(l.k, x+padX, ly);
+      if(l.verdict){
+        ctx.fillStyle = res.verdict==='PENETRATION' ? '#34d399' : '#60a5fa';
+      } else if(l.hi){
+        ctx.fillStyle = '#38bdf8';
+      } else {
+        ctx.fillStyle = '#e7ecf3';
+      }
+      const kW = ctx.measureText(l.k + '   ').width;
+      ctx.fillText(l.v, x+padX+kW, ly);
+    });
+
+    ctx.restore();
+  }
+
+  function drawAngleDimension(center, dirA, dirB, radius, label, color){
+    let a0 = Math.atan2(dirA.y, dirA.x);
+    let a1 = Math.atan2(dirB.y, dirB.x);
+    let delta = a1 - a0;
+    while(delta > Math.PI) delta -= Math.PI*2;
+    while(delta < -Math.PI) delta += Math.PI*2;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, radius, a0, a0+delta, delta<0);
+    ctx.stroke();
+
+    [a0, a0+delta].forEach(ang=>{
+      const p0 = { x:center.x+Math.cos(ang)*(radius-5), y:center.y+Math.sin(ang)*(radius-5) };
+      const p1 = { x:center.x+Math.cos(ang)*(radius+5), y:center.y+Math.sin(ang)*(radius+5) };
+      ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
+    });
+
+    const midAng = a0 + delta/2;
+    const lx = center.x + Math.cos(midAng)*(radius+22);
+    const ly = center.y + Math.sin(midAng)*(radius+22);
+    ctx.font = '600 11px "JetBrains Mono", monospace';
+    const text = label;
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = '#1a1d24';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.rect(lx-tw/2-6, ly-9, tw+12, 18);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, lx, ly+1);
+    ctx.restore();
+  }
+
+  function drawNormalLine(geo){
+    const extend = Math.max(geo.plateLength*0.35, 90);
+    const p0 = vsub(geo.contact, vscale(geo.normal, extend));
+    const p1 = vadd(geo.contact, vscale(geo.normal, extend*0.35));
+    ctx.save();
+    ctx.setLineDash([2,4]);
+    ctx.strokeStyle = 'rgba(226,232,240,0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
+    ctx.restore();
+  }
+
+  function renderScene(){
+    const w = el.canvas.clientWidth, h = el.canvas.clientHeight;
+    ctx.clearRect(0,0,w,h);
+    drawGrid();
+
+    if(!scene.geometry){
+      scene.geometry = buildGeometry(state, computeShot(state));
+    }
+    const geo = scene.geometry;
+    const res = scene.result;
+
+    if(scene.phase === 'idle'){
+      drawPlate(geo);
+      drawTrajectory(geo, undefined, true);
+      return;
+    }
+
+    const now = performance.now();
+    const t_val = (now - scene.phaseStart)/1000;
+
+    if(scene.phase === 'flight'){
+      const dur = 0.55;
+      const p = clamp(t_val/dur, 0, 1);
+      drawPlate(geo);
+      const shellPos = drawTrajectory(geo, easeInCubic(p));
+      drawShellMarker(shellPos, geo.travelDir);
+      if(p>=1){
+        beginImpactPhase();
+      }
+    } else if(scene.phase === 'impact'){
+      drawPlate(geo);
+      drawTrajectory(geo, 1, false);
+
+      if(res.verdict === 'PENETRATION'){
+        const dur = 0.28;
+        const p = clamp(t_val/dur, 0, 1);
+        
+        // РАСЧЁТ ГЛУБИНЫ ОСТАНОВКИ СНАРЯДА (ВИЗУАЛЬНО)
+        const visualPathLen = geo.thicknessPx / Math.cos(res.trueAngle * DEG2RAD);
+        const distRatio = (res.margin < 0) ? (res.basePen / res.effectiveThickness) : 1.15;
+        const exitPoint = vadd(geo.contact, vscale(geo.travelDir, visualPathLen * distRatio));
+        
+        const pos = { x: lerp(geo.contact.x, exitPoint.x, p), y: lerp(geo.contact.y, exitPoint.y, p) };
+
+        if(res.margin < 0){
+          // Снаряд застревает — гасим скорость к моменту остановки, а не телепортируем
+          const stopEase = 1 - Math.pow(1-p, 4);
+          const stuckPos = { x: lerp(geo.contact.x, exitPoint.x, stopEase), y: lerp(geo.contact.y, exitPoint.y, stopEase) };
+          drawShellMarker(stuckPos, geo.travelDir);
+        } else {
+          drawShellMarker(pos, geo.travelDir);
+        }
+        
+        if(p>=1 && scene.particles.length===0 && !scene._spawned){
+          if(res.margin >= 0){ // Сквозной сноп осколков только при полном пробитии
+            spawnFragmentCone(exitPoint, geo.travelDir);
+          } else { // Застревание — короткая вспышка стружки/искр у точки входа, не осколочный конус
+            spawnStuckSparks(geo.contact, geo.travelDir);
+          }
+          scene._spawned = true;
+        }
+      } else if(res.verdict === 'RICOCHET'){
+        const dir = reflect(geo.travelDir, geo.normal);
+        const dur = 0.5;
+        const p = clamp(t_val/dur, 0, 1);
+        const endPoint = vadd(geo.contact, vscale(dir, 220));
+        const pos = { x: lerp(geo.contact.x, endPoint.x, easeOutCubic(p)), y: lerp(geo.contact.y, endPoint.y, easeOutCubic(p)) };
+        ctx.save();
+        ctx.strokeStyle = 'rgba(59,130,246,0.65)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3,3]);
+        ctx.beginPath(); ctx.moveTo(geo.contact.x,geo.contact.y); ctx.lineTo(pos.x,pos.y); ctx.stroke();
+        ctx.restore();
+        drawShellMarker(pos, vnorm(dir));
+        if(p > 0.15 && Math.random()<0.4) spawnDeflectionDust(pos);
+      }
+
+      updateParticles(1/60);
+      drawParticles();
+
+      const settleDur = res.verdict==='PENETRATION' ? 0.9 : 0.55;
+      if(t_val >= settleDur){
+        beginSettledPhase();
+      }
+    } else if(scene.phase === 'settled'){
+      drawPlate(geo);
+
+      if(scene.finalShell && scene.finalShell.stuck){
+        drawStuckShell(geo, scene.finalShell);
+      }
+
+      drawTrajectory(geo, 1, false);
+
+      updateParticles(1/60);
+      drawParticles();
+
+      if(scene.finalShell && !scene.finalShell.stuck){
+        drawShellMarker(scene.finalShell.pos, scene.finalShell.dir);
+      }
+
+      drawNormalLine(geo);
+      const refDir = { x:-geo.normal.x, y:-geo.normal.y };
+      drawAngleDimension(geo.contact, refDir, geo.travelDir, 56, res.trueAngle.toFixed(1)+'°', '#38bdf8');
+    }
+
+    drawConfigOverlay(geo, res, scene.phase);
+  }
+
+  /* ============================================================
+     PHASE TRANSITIONS
+  ============================================================ */
+  function resetToIdle(){
+    scene.phase = 'idle';
+    scene.result = null;
+    scene.geometry = null;
+    scene.particles = [];
+    scene._spawned = false;
+    scene.finalShell = null;
+    setStatus('idle', t('statusIdle'));
+    el.fireBtn.disabled = false;
+    renderTelemetryPlaceholder();
+  }
+
+  function beginImpactPhase(){
+    scene.phase = 'impact';
+    scene.phaseStart = performance.now();
+    scene._spawned = false;
+  }
+
+  function beginSettledPhase(){
+    scene.phase = 'settled';
+    scene.phaseStart = performance.now();
+
+    const geo = scene.geometry;
+    const res = scene.result;
+
+    if(res.verdict === 'PENETRATION' && res.margin < 0){
+      // Снаряд застрял в броне — фиксируем точку остановки навсегда, пока не будет нового выстрела
+      const visualPathLen = geo.thicknessPx / Math.cos(res.trueAngle * DEG2RAD);
+      const distRatio = res.basePen / res.effectiveThickness;
+      const stopPoint = vadd(geo.contact, vscale(geo.travelDir, visualPathLen * distRatio));
+      scene.finalShell = { pos: stopPoint, dir: geo.travelDir, stuck: true };
+    } else if(res.verdict === 'RICOCHET'){
+      // Рикошет — фиксируем конечную точку отскока, снаряд остаётся в кадре
+      const dir = vnorm(reflect(geo.travelDir, geo.normal));
+      const endPoint = vadd(geo.contact, vscale(dir, 220));
+      scene.finalShell = { pos: endPoint, dir: dir, stuck: false };
+    } else {
+      // Полное пробитие — снаряд ушёл за пределы плиты, фиксировать нечего
+      scene.finalShell = null;
+    }
+
+    const v = res.verdict;
+    if(v==='PENETRATION') setStatus('pen', t('statusPen'));
+    else if(v==='RICOCHET') setStatus('ric', t('statusRic'));
+    el.fireBtn.disabled = false;
+    renderTelemetryReport(res);
+  }
+
+  function fireShot(){
+    const result = computeShot(state);
+    scene.result = result;
+    scene.geometry = buildGeometry(state, result);
+    scene.particles = [];
+    scene._spawned = false;
+    scene.finalShell = null;
+    scene.phase = 'flight';
+    scene.phaseStart = performance.now();
+    el.fireBtn.disabled = true;
+    setStatus('calc', t('statusCalc'));
+    renderTelemetryPlaceholder(true);
+  }
+
+  function setStatus(cls, text){
+    el.statusDot.className = 'status-dot ' + cls;
+    el.statusText.textContent = text;
+  }
+
+  /* ============================================================
+     TELEMETRY RENDERING
+  ============================================================ */
+  function renderTelemetryPlaceholder(calculating){
+    el.telemetryTimestamp.textContent = '';
+    el.telemetryBody.innerHTML = '<div class="telemetry-placeholder">' +
+      (calculating ? t('phCalc') : t('phIdle')) +
+      '</div>';
+  }
+
+  function row(k, v, cls){
+    return '<div class="telemetry-row"><span class="k">'+k+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>';
+  }
+
+  function renderTelemetryReport(r){
+    const d = new Date();
+    el.telemetryTimestamp.textContent = 'T+' + d.toLocaleTimeString(currentLang==='ru'?'ru-RU':'en-US');
+
+    let html = '';
+    html += row(t('rowShot'), r.shotTiltDeg.toFixed(1)+'°');
+    html += row(t('rowPlate'), r.plateTiltDeg.toFixed(1)+'°');
+    html += row(t('rowTrue'), r.trueAngle.toFixed(1)+'°');
+    html += row(t('rowRic').replace('{thr}', r.ricAngle), r.ricochet ? t('ricYes') : t('ricNo'), r.ricochet ? 'blue' : 'dim');
+    html += row(t('rowNominal'), r.thickness+' '+t('unitMm'));
+    html += row(t('rowEff'), r.effectiveThickness.toFixed(1)+' '+t('unitMm'));
+    html += row(t('rowBasePen'), r.basePen+' '+t('unitMm'));
+    
+    // РАСЧЁТ ГЛУБИНЫ (ПОКАЗЫВАТЬ ТОЛЬКО ДЛЯ ПРОБИТИЯ)
+    if(!r.ricochet){
+        const depth = r.margin < 0 ? r.basePen : r.effectiveThickness;
+        const depthStr = depth.toFixed(1) + ' ' + t('unitMm') + (r.margin < 0 ? ` ( / ${r.effectiveThickness.toFixed(1)} )` : '');
+        html += row(t('rowDepth'), depthStr, r.margin < 0 ? 'amber' : '');
+    }
+
+    html += row(t('rowCalType'), r.caliber+' '+t('unitMm')+' · '+t('typeAP'));
+
+    el.telemetryBody.innerHTML = '<div class="telemetry-grid">'+html+'</div>' + renderVerdictBlock(r);
+  }
+
+  function renderVerdictBlock(r){
+    let cls, label, sub;
+    if(r.verdict==='PENETRATION'){
+      cls='pen'; label=t('statusPen');
+      if(r.margin >= 0){
+        sub = t('marginPlus') + r.margin.toFixed(1) + ' ' + t('unitMm');
+      } else {
+        sub = t('marginMinus') + Math.abs(r.margin).toFixed(1) + ' ' + t('unitMm');
+      }
+    } else {
+      cls='ric'; label=t('statusRic');
+      sub = t('ricSub').replace('{ang}', r.trueAngle.toFixed(1)).replace('{thr}', r.ricAngle);
+    }
+    return '<div class="verdict '+cls+'">' +
+      '<div class="verdict-main">' +
+        '<span class="verdict-label">'+t('verdictTitle')+'</span>' +
+        '<span class="verdict-value">'+label+'</span>' +
+      '</div>' +
+      '<div class="verdict-sub">'+sub+'</div>' +
+    '</div>';
+  }
+
+  /* ============================================================
+     MAIN LOOP
+  ============================================================ */
+  function loop(){
+    renderScene();
+    requestAnimationFrame(loop);
+  }
+
+  function handleResize(){
+    resizeCanvas();
+    scene.geometry = buildGeometry(state, scene.result || computeShot(state));
+  }
+
+  window.addEventListener('resize', handleResize);
+
+  // init
+  resizeCanvas();
+  scene.geometry = buildGeometry(state, computeShot(state));
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
